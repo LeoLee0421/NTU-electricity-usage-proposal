@@ -35,11 +35,11 @@ while current_date <= end_date:
 # Processing
 
 for current_date in tqdm(dates, desc="Processing dates"):
-    
+
     # Set time
     date_str = current_date.strftime("%Y-%m-%d")
     daily_dfs = []
-    
+
     # Read in request files
     for page in [1, 2, 3]:
         params = {
@@ -49,20 +49,20 @@ for current_date in tqdm(dates, desc="Processing dates"):
             "Capacity": 1,
             "SelectButton": "查詢"
         }
-        
+
         response = requests.get(url, params=params, headers=headers)
-        
+
         if response.status_code != 200:
             print(f"Failed on {date_str}, page {page}")
             continue
-        
+
         try:
             dfs = pd.read_html(response.text)
             df = dfs[2]
             daily_dfs.append(df)
         except Exception as e:
             print(f"Error on {date_str}, page {page}: {e}")
-    
+
     if not daily_dfs:
         continue
 
@@ -84,21 +84,25 @@ for current_date in tqdm(dates, desc="Processing dates"):
     df = df.drop(columns=[first_col])
     df = df.set_index('room')
 
-    # Set time as MultiIndex columns
+    # Set time priod as columns
     cols = df.columns
     new_cols = []
 
     for col in cols:
-        if col == "capacity":
-            new_cols.append(("capacity", "", ""))
-            continue
-
         parts = str(col).split()
-        if len(parts) == 3: start, end, period = parts
-        else: start, end, period = None, None, None
-        new_cols.append((start, end, period))
 
-    df.columns = pd.MultiIndex.from_tuples(new_cols, names=["start", "end", "period"])
+        if col == "capacity":
+            continue 
+
+        if len(parts) == 3:
+            start, end, period = parts
+            new_cols.append(period)
+        else:
+            new_cols.append(col)
+
+    df = df.drop(columns=["capacity"], errors="ignore")
+
+    df.columns = new_cols
 
     # Save =================================================================
 
@@ -108,20 +112,20 @@ for current_date in tqdm(dates, desc="Processing dates"):
     
 # Save into binary files
 
+# Save into binary files
+
 INPUT_FOLDER = "/content/drive/MyDrive/NTU/Data Science of Env and Eng/data/putong-class-timetable"
 OUTPUT_FOLDER = "/content/drive/MyDrive/NTU/Data Science of Env and Eng/data/binary-cleaning"
 
 csv_files = glob.glob(os.path.join(INPUT_FOLDER, "*.csv"))
 
 for file in csv_files:
+
     df = pd.read_csv(file)
-    capacity_col = df['capacity']
-    df_courses = df.drop(columns=['capacity'])
-    df_binary = df_courses.notna().astype(int)
-    df_binary['capacity'] = capacity_col
+    df_binary = df.notna().astype(int)
 
     filename = f"putong_timetable_binary_{os.path.basename(file)[17:27]}.csv"
     save_path = os.path.join(OUTPUT_FOLDER, filename)
-    df_binary.to_csv(save_path, index=False)
+    df_binary.to_csv(save_path, index=True)
 
 print("Done")

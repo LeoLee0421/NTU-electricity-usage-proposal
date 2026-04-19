@@ -1,0 +1,69 @@
+import pandas as pd
+import numpy as np
+from scipy.optimize import nnls
+import os
+
+# Set path
+WORK_DIR = os.getcwd()
+DATA_DIR = os.path.join(WORK_DIR, "data", "cleandata")
+ROOM_DIR = os.path.join(WORK_DIR, "data", "binary-clean")
+
+df = pd.read_csv(os.path.join(DATA_DIR, "period_electricity_clean.csv"), index_col=0)
+
+results = []
+
+for date in df.columns:
+
+    df_room = pd.read_csv(os.path.join(ROOM_DIR, f"putong_timetable_binary_{date}.csv"))
+    if pd.to_datetime(date).weekday() != 4: continue
+
+    # Remove useless room
+    df_room = df_room.drop(columns=['0'])
+    df_room = df_room[df_room['room'] != '普506']
+    df_room = df_room.set_index('room')
+
+    # Find same schedule rooms
+    cols = df_room.columns.difference(['room'], sort=False)
+    df_room['pattern'] = df_room[cols].apply(tuple, axis=1)
+    groups = df_room.groupby('pattern').groups
+    group_list = list(groups.values())
+
+    # Reduced design matrix
+    X_reduced = []
+    for group in group_list:
+        first_room = list(group)[0]
+        rep = df_room.loc[first_room, cols]
+        rep = pd.to_numeric(rep, errors='coerce').fillna(0)
+        X_reduced.append(rep.values.astype(float))
+    X_reduced = np.array(X_reduced, dtype=float).T  
+    #X_reduced = np.hstack([
+    #    X_reduced,
+    #    np.ones((X_reduced.shape[0], 1))
+    #])
+
+    # Electricity usage vector
+    y = df[date].values
+
+    # Solve least squares
+    beta_group = np.linalg.lstsq(X_reduced, y, rcond=None)[0]
+
+    room_usage = {}
+    for i, group in enumerate(group_list):
+        rooms = list(group)
+        share = beta_group[i] / len(rooms)
+        for r in rooms: room_usage[r] = share
+
+    temp = pd.DataFrame({
+        'room': list(room_usage.keys()),
+        'date': date,
+        'usage': list(room_usage.values())
+    })
+
+    results.append(temp)
+
+
+final_result = pd.concat(results, ignore_index=True)
+final_wide = final_result.pivot(index='room', columns='date', values='usage')
+
+print(final_wide)
+final_wide.to_csv(os.path.join(DATA_DIR, "classroom_electricity_clean.csv"), index=True)

@@ -105,3 +105,23 @@ for current_date in tqdm(dates, desc="Processing dates"):
     filename = f"putong_timetable_{date_str}.csv"
     df.to_csv(os.path.join(OUTPUT_FOLDER, filename))
     time.sleep(1)
+    
+# Save into binary files
+
+INPUT_FOLDER = "/content/drive/MyDrive/NTU/Data Science of Env and Eng/data/putong-class-timetable"
+OUTPUT_FOLDER = "/content/drive/MyDrive/NTU/Data Science of Env and Eng/data/binary-cleaning"
+
+csv_files = glob.glob(os.path.join(INPUT_FOLDER, "*.csv"))
+
+for file in csv_files:
+    df = pd.read_csv(file)
+    capacity_col = df['capacity']
+    df_courses = df.drop(columns=['capacity'])
+    df_binary = df_courses.notna().astype(int)
+    df_binary['capacity'] = capacity_col
+
+    filename = f"putong_timetable_binary_{os.path.basename(file)[17:27]}.csv"
+    save_path = os.path.join(OUTPUT_FOLDER, filename)
+    df_binary.to_csv(save_path, index=False)
+
+print("Done")
